@@ -10,3 +10,6 @@ assignment	server/test_voice_bridge.py	test-token-123
 
 # 라이선스 저작권자(공개 GitHub 계정 이름)
 term	LICENSE	^kjin$
+
+# 기기 이름(DEVICE_ID 예시). 비밀이 아니라 문서·예시 곳곳에 일부러 적은 공개 이름이다 — 실값 출처의 config.h 가 #define 으로 같은 이름을 쓴다
+secret_value	*	^sticks3-1$

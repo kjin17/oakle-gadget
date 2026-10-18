@@ -101,6 +101,7 @@ docs/                    하드웨어·Wi-Fi 설정·IR·흔들기·중계 규�
 - 집 모드는 LAN 평문 HTTP 다. `BIND` 를 LAN IP 로 두고 인터넷에 열지 않는다. 집 안에서는 버튼을 누른 누구나 같은 권한으로 에이전트를 부른다.
 - 바깥 모드는 도구를 제한한 별도 에이전트를 권한다(`OAKLE_AGENT`, [server/README.md](server/README.md)).
 - Wi-Fi 비밀번호·기기 토큰은 기기 NVS·바이너리에 평문으로 있다. 기기를 잃어버리면 서버에서 `revoke-device` 로 폐기한다.
+- push 전 민감정보 점검: `SECRET_SOURCES=<내 config.h·비밀 폴더, 콜론 구분> python3 ops/sensitive_check.py --strict`. 출처의 기본값은 없다 — 안 넘기거나 읽은 실값이 0개면 `--strict` 는 exit 2, 없이 돌리면 「미검사」(exit 3)다. `git config core.hooksPath ops/hooks` 를 해 두면 `ops/hooks/pre-push` 가 리포 밖 `~/.config/oakle-gadget/precheck.env`(셸 문법, `SECRET_SOURCES=…`)를 읽어 push 마다 돌린다.
 
 ## 라이선스
 

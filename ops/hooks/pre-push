@@ -1,0 +1,23 @@
+#!/bin/sh
+# git pre-push: 나갈 끝 커밋의 트리를 임시 폴더에 떠서 ops/sensitive_check.py --strict. 실패하면 push 를 막는다.
+# 켜기(클론마다 한 번): git config core.hooksPath ops/hooks
+# 실값 출처는 리포 밖 ${OAKLE_PRECHECK_ENV:-~/.config/oakle-gadget/precheck.env} 에 셸 문법으로:
+#   SECRET_SOURCES=<실값 파일·폴더, 콜론 구분>   (기본값 없음 — 없으면 --strict 가 exit 2 로 막는다)
+# 리포가 공개라 push 가 곧 공개다. 건너뛰기는 git push --no-verify 뿐이고 그건 사람이 고른 것이다.
+set -eu
+Z=0000000000000000000000000000000000000000
+ENV_FILE=${OAKLE_PRECHECK_ENV:-$HOME/.config/oakle-gadget/precheck.env}
+# shellcheck disable=SC1090
+[ ! -f "$ENV_FILE" ] || . "$ENV_FILE"
+export SECRET_SOURCES="${SECRET_SOURCES:-}"
+cd "$(git rev-parse --show-toplevel)"
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/oakle-precheck.XXXXXX")
+chmod 700 "$WORK"
+trap 'rm -rf "$WORK"' EXIT INT TERM
+while read -r lref lsha rref rsha; do
+  [ "$lsha" != "$Z" ] || continue
+  rm -rf "$WORK/tree"; mkdir "$WORK/tree"
+  git archive --format=tar "$lsha" | tar -x -C "$WORK/tree"
+  echo "pre-push: $(git rev-parse --short=7 "$lsha") 민감정보 점검"
+  python3 ops/sensitive_check.py --strict "$WORK/tree" || { echo "pre-push 멈춤: 민감정보 점검 실패 (위 목록)"; exit 1; }
+done

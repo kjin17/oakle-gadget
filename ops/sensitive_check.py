@@ -15,8 +15,11 @@
   gitleaks       gitleaks 가 PATH 에 있으면 함께 돌려 그 결과 수를 더한다
 
 ■ 설정 (전부 리포 밖. 경로를 리포에 적지 않는다)
-  SECRET_SOURCES   콜론으로 구분한 파일·폴더. 그 안의 값(JSON 값·KEY=VALUE·한 줄 파일·긴 토큰)을
-                         실값으로 보고 대조한다. 출력은 「출처 번호·값 sha256 앞 8자」뿐이다
+  SECRET_SOURCES   콜론으로 구분한 파일·폴더. 그 안의 값(JSON 값·KEY=VALUE·한 줄 파일·긴 토큰·
+                         C/헤더의 문자열 상수 — #define NAME "값", {"ssid","pass"} 배열)을 실값으로 보고 대조한다.
+                         출력은 「출처 번호·값 sha256 앞 8자」뿐이다. 기본값은 없다(리포가 공개라 개인 경로를
+                         적지 않는다) — 부르는 쪽(ops/hooks/pre-push 가 읽는 리포 밖 precheck.env 등)이 반드시 넘긴다.
+                         없거나 읽은 실값이 0개면 결과는 「미검사」다(통과 아님)
   SENSITIVE_TERMS  한 줄에 「라벨<TAB>정규식」. 기본 ~/.config/oakle-gadget/sensitive_terms.txt
   허용 목록               ops/sensitive_allow.txt (리포 안, 공개돼도 되는 것만). 한 줄에
                          「검사<TAB>경로 glob<TAB>정규식」 — 그 경로에서 걸린 글자가 정규식과 맞으면 통과
@@ -25,7 +28,9 @@
     python3 ops/sensitive_check.py <폴더>          # 내보낸 트리 등 아무 폴더 (.git 제외 전부)
     python3 ops/sensitive_check.py --strict ...    # 실값 대조·용어 목록이 없으면 exit 2 (공개·배포 전엔 이것)
 
-  exit 0 = 걸린 것 0, 1 = 걸림(목록 출력), 2 = 설정 문제(--strict 에서 출처가 없거나 못 읽음)
+  exit 0 = 걸린 것 0 이고 실값 대조도 했다, 1 = 걸림(목록 출력),
+       2 = 설정 문제(--strict 에서 출처가 없거나 못 읽거나 읽은 실값 0개),
+       3 = 미검사(--strict 없이, 걸린 것은 0 인데 실값 대조를 못 했다 — 통과로 읽지 말 것)
 """
 from __future__ import annotations
 
@@ -72,6 +77,7 @@ EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+\.)+[A-Za-z]{2,}")
 HOME = re.compile(r"(/Users/|/home/)[A-Za-z0-9._-]+")
 WIKI = re.compile(r"\[\[[^\]\[\n\d\"',\s-][^\]\n]*\]\]")
 TOKEN = re.compile(r"[A-Za-z0-9_\-+/=.:@]{8,}")
+CSTR = re.compile(r'"((?:[^"\\\n]|\\.){8,})"')     # 실값 출처 안의 C 문자열 상수
 
 # EXIF 에서 통과시키는 태그: ExifIFD 포인터, 색공간, 픽셀 가로·세로, 방향, 해상도·단위
 BENIGN_EXIF = {0x8769, 0xA001, 0xA002, 0xA003, 0x0112, 0x011A, 0x011B, 0x0128}
@@ -151,8 +157,10 @@ def secret_values(problems: list[str]) -> dict[str, str]:
                 t = b.decode("utf-8")
             except (OSError, UnicodeDecodeError):
                 continue
+            is_json = False
             try:
                 walk(json.loads(t), src)
+                is_json = True
             except ValueError:
                 pass
             lines = [ln.strip() for ln in t.splitlines() if ln.strip()]
@@ -161,9 +169,14 @@ def secret_values(problems: list[str]) -> dict[str, str]:
             for ln in lines:
                 if "=" in ln and not ln.startswith("#"):
                     add(ln.split("=", 1)[1].strip().strip("\"'"), src)
+            if not is_json:                # #define NAME "값"·{"ssid","pass"} — JSON 은 키도 문자열이라 값만(walk) 본다
+                for m in CSTR.finditer(t):
+                    add(m.group(1), src)
             for tok in TOKEN.findall(t):
                 if len(tok) >= 16 and re.search(r"\d", tok) and re.search(r"[A-Za-z]", tok):
                     add(tok, src)
+    if not vals:
+        problems.append("실값을 하나도 못 읽음 — 실값 대조 건너뜀 (출처 형식 확인)")
     return vals
 
 
@@ -328,8 +341,14 @@ def main(argv: list[str]) -> int:
         print(f"걸림 {len(hits)}건:")
         print("\n".join("  " + h for h in hits))
     total = len(hits) + gl_n
-    print(f"결과: {'통과 (걸린 것 0)' if total == 0 else f'걸림 {total}건 — push·배포·공개 금지'}")
-    return 0 if total == 0 else 1
+    if total:
+        print(f"결과: 걸림 {total}건 — push·배포·공개 금지")
+        return 1
+    if not secrets:                        # 실값 대조를 안 한 0 은 통과가 아니다
+        print("결과: 미검사 (걸린 것 0 이지만 실값 대조를 못 했다 — 출처를 넘겨 다시 돌릴 것, 통과 아님)")
+        return 3
+    print("결과: 통과 (걸린 것 0)")
+    return 0
 
 
 if __name__ == "__main__":
