@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 커넥터 LaunchAgent 예시(macOS). ~/Library/LaunchAgents/ai.oakle.relay-connector.plist 로 복사하고 경로를 고친다.
+     KeepAlive 로 죽으면 다시 뜬다. 재접속 백오프는 connector.py 가 한다(1→60초).
+     로그는 /tmp 가 아니라 ~/Library/Logs 에(재부팅에 지워지지 않게). PATH 에 openclaw 가 있어야 한다. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>ai.oakle.relay-connector</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/PATH/TO/oakle-gadget/server/relay/connector.py</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>RELAY_URL</key><string>wss://relay.example.com/v1/connect</string>
+    <key>BRAIN</key><string>cli</string>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardErrorPath</key><string>/PATH/TO/HOME/Library/Logs/oakle-relay-connector.log</string>
+</dict>
+</plist>

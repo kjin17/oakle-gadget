@@ -1,0 +1,24 @@
+# 비밀값·개인 설정 — 예시(*.example)만 커밋한다
+firmware/**/config.h
+esphome/secrets.yaml
+server/.env
+.env
+.env.*
+!*.example
+
+# 빌드·상태
+build/
+.pio/
+.esphome/
+esphome/.esphome/
+__pycache__/
+*.pyc
+*.sqlite3
+*.wav
+*.aiff
+*.jsonl
+
+# 표정 그림 — 리포에 넣지 않는다(faces/README.md 로 각자 만든다)
+firmware/oakle_gadget/faces/*.png
+firmware/oakle_gadget/faces/*.h
+firmware/oakle_gadget/faces/*.bin

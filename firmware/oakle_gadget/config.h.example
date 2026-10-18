@@ -1,0 +1,34 @@
+// config.h 로 복사해서 채운다: cp config.h.example config.h
+// config.h 는 .gitignore 대상 — 실제 값은 이 예시 파일에 적지 말 것.
+#pragma once
+
+// Wi-Fi: 비워 둬도 된다 — 처음 켜면 설정 모드(「Oakle-Gadget-XXXX」 Wi-Fi + 설정 페이지)에서 휴대폰으로 넣는다.
+// 넣으면 첫 부팅 때 NVS 에 「집」 망으로 한 번 들어가고(시드), 그 뒤엔 NVS 가 우선. 값을 바꿔 다시 구우면 그때만 다시 합친다
+#define WIFI_SSID     "CHANGE_ME"
+#define WIFI_PASS     "CHANGE_ME"
+#define DEVICE_ID     "sticks3-1"
+#define DEVICE_TOKEN  "CHANGE_ME"   // server/voice_bridge.py add-device sticks3-1 이 한 번 출력하는 값
+
+// 집 모드: 「집」 표시 망에 붙으면 같은 LAN 의 voice_bridge 로 평문 HTTP (LAN 전용 — 인터넷에 열지 말 것)
+#define SERVER_URL "http://192.0.2.10:8765/v1/ask"   // 192.0.2.10 은 문서용 예시 주소. voice_bridge 를 띄운 PC 의 LAN IP 로 바꾼다
+
+// 바깥 모드(선택): 「집」 표시가 없는 망(휴대폰 핫스팟 등)에 붙으면 중계 서버로 HTTPS + 서명(docs/relay-protocol.md).
+// RELAY_SECRET 을 빼면 집 전용 펌웨어가 된다(모든 망이 집 모드). 둘 다 보이면 집이 먼저. TLS 루트는 relay_ca.h(ISRG Root X1·X2)
+// HOTSPOT_SSID 는 바깥 망 첫 시드(선택) — 포털에서 넣어도 된다. 아이폰 핫스팟 이름의 ' 는 보통 굽은 따옴표(’)라 손으로 적으면 안 맞을 수 있다
+// #define PORTAL_PASS   "CHANGE_ME"   // 설정 Wi-Fi 비밀번호(8자 이상). 빼면 열린 망
+// #define HOTSPOT_SSID  "CHANGE_ME"
+// #define HOTSPOT_PASS  "CHANGE_ME"
+// #define RELAY_SECRET  "CHANGE_ME"   // server/relay/connector.py add-device sticks3-1 이 한 번 출력하는 기기 비밀
+// #define RELAY_URL     "https://relay.example.com/v1/ask"   // RELAY_SECRET 을 넣으면 필수
+
+// TV 전원 IR (집 모드). 기본 0 = 켜기·끄기·전원 모두 LG 토글 0x20DF10EF. 1 = LG 전용 켜기·끄기 코드
+// #define IR_LG_DISCRETE 0
+// 학습한 리모컨 신호(B 3초)를 기본 코드 대신 쏘려면 1(기본 0)
+// #define IR_USE_LEARNED 0
+// 반송파 극성. 기본 false(= 반송파를 mark 에, M5 공식 StickS3 IR 예제와 같음). 바꿀 일은 거의 없다
+// #define IR_CARRIER_LEVEL false
+
+// 흔들기 반응(docs/shake.md). 기본값으로 충분하면 건드리지 않는다
+// #define SHAKE_ENABLE 1
+// #define SHAKE_G 1.8f          // 오작동하면 올리고(2.2~2.5), 잘 안 먹으면 내린다(1.5)
+// #define SHAKE_COOLDOWN_S 5

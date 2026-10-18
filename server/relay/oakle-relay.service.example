@@ -1,0 +1,23 @@
+# 중계 서버 systemd 유닛 예시. /etc/systemd/system/oakle-relay.service
+# 비밀은 유닛에 적지 않는다: CRED_DIR/oakle_relay_connector_token.sha256 (해시만, 기본 CRED_DIR=~/.openclaw/credentials)
+[Unit]
+Description=oakle relay (device <-> home connector)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=oakle
+WorkingDirectory=/opt/oakle-relay
+Environment=BIND=127.0.0.1 PORT=8766 DAILY_LIMIT=200 RATE_PER_MIN=20
+Environment=STATE_DIR=/var/lib/oakle-relay
+ExecStart=/usr/bin/python3 /opt/oakle-relay/relay_server.py
+Restart=always
+RestartSec=3
+StateDirectory=oakle-relay
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

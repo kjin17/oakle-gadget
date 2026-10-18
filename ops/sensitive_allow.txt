@@ -1,0 +1,12 @@
+# ops/sensitive_check.py 허용 목록 — 공개돼도 되는 것만. 한 줄: 검사<TAB>경로 glob<TAB>정규식(걸린 글자와 맞으면 통과)
+# 넓게 열지 말 것: 경로는 파일 하나로, 정규식은 그 값으로 좁힌다
+
+# 기기가 설정 모드에서 스스로 띄우는 SoftAP 의 자기 주소(ESP32 기본값). 집 네트워크 주소가 아니다
+ipv4	firmware/oakle_gadget/oakle_gadget.ino	^192\.168\.4\.1$
+ipv4	docs/wifi-setup.md	^192\.168\.4\.1$
+
+# 시험에 심은 가짜 토큰
+assignment	server/test_voice_bridge.py	test-token-123
+
+# 라이선스 저작권자(공개 GitHub 계정 이름)
+term	LICENSE	^kjin$
