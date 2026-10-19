@@ -12,7 +12,7 @@
   wiki_link      [[노트 이름]] 꼴 (개인 노트 링크가 딸려 온 것)
   file           DB·로그·키·인증서·압축·백업·.env 류 파일
   image_meta     그림의 EXIF·XMP·텍스트 덩어리. 크기·색공간만 든 EXIF 는 통과, 기기·GPS·시각·소프트웨어는 걸린다
-  gitleaks       gitleaks 가 PATH 에 있으면 함께 돌려 그 결과 수를 더한다
+  gitleaks       gitleaks 를 함께 돌려 그 결과 수를 더한다. PATH 에 없으면 실값 대조가 빠진 것과 같다(미검사)
 
 ■ 설정 (전부 리포 밖. 경로를 리포에 적지 않는다)
   SECRET_SOURCES   콜론으로 구분한 파일·폴더. 그 안의 값(JSON 값·KEY=VALUE·한 줄 파일·긴 토큰·
@@ -29,8 +29,8 @@
     python3 ops/sensitive_check.py --strict ...    # 실값 대조·용어 목록이 없으면 exit 2 (공개·배포 전엔 이것)
 
   exit 0 = 걸린 것 0 이고 실값 대조도 했다, 1 = 걸림(목록 출력),
-       2 = 설정 문제(--strict 에서 출처가 없거나 못 읽거나 읽은 실값 0개),
-       3 = 미검사(--strict 없이, 걸린 것은 0 인데 실값 대조를 못 했다 — 통과로 읽지 말 것)
+       2 = 설정 문제(--strict 에서 출처가 없거나 못 읽거나 읽은 실값 0개, 또는 gitleaks 가 PATH 에 없음),
+       3 = 미검사(--strict 없이, 걸린 것은 0 인데 실값 대조나 gitleaks 를 못 했다 — 통과로 읽지 말 것)
 """
 from __future__ import annotations
 
@@ -253,7 +253,7 @@ def image_meta(b: bytes, name: str) -> list[str]:
 def run_gitleaks(root: Path) -> tuple[int, str]:
     exe = shutil.which("gitleaks")
     if not exe:
-        return 0, "gitleaks 없음 — 건너뜀"
+        return 0, "gitleaks 없음 — 미검사"
     with tempfile.TemporaryDirectory() as td:
         rep = Path(td) / "r.json"
         p = subprocess.run([exe, "dir", str(root), "--no-banner", "--redact", "--report-format", "json",
@@ -279,6 +279,9 @@ def main(argv: list[str]) -> int:
     allow = load_allow()
     terms = load_terms(strict, problems)
     secrets = secret_values(problems)
+    gl_missing = shutil.which("gitleaks") is None
+    if gl_missing:                         # 실값 대조와 같은 규칙: 못 돌린 검사의 0 은 통과가 아니다
+        problems.append("gitleaks 가 PATH 에 없음 — gitleaks 검사 건너뜀")
     if strict and problems:
         print("설정 문제(--strict):\n  " + "\n  ".join(problems))
         return 2
@@ -344,8 +347,9 @@ def main(argv: list[str]) -> int:
     if total:
         print(f"결과: 걸림 {total}건 — push·배포·공개 금지")
         return 1
-    if not secrets:                        # 실값 대조를 안 한 0 은 통과가 아니다
-        print("결과: 미검사 (걸린 것 0 이지만 실값 대조를 못 했다 — 출처를 넘겨 다시 돌릴 것, 통과 아님)")
+    if not secrets or gl_missing:          # 실값 대조·gitleaks 를 안 한 0 은 통과가 아니다
+        miss = "·".join(m for m, bad in (("실값 대조", not secrets), ("gitleaks", gl_missing)) if bad)
+        print(f"결과: 미검사 (걸린 것 0 이지만 {miss}를 못 했다 — 출처를 넘기거나 gitleaks 를 설치해 다시 돌릴 것, 통과 아님)")
         return 3
     print("결과: 통과 (걸린 것 0)")
     return 0
