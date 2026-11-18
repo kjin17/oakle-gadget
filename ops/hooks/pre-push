@@ -1,8 +1,13 @@
 #!/bin/sh
-# git pre-push: 나갈 끝 커밋의 트리를 임시 폴더에 떠서 ops/sensitive_check.py --strict. 실패하면 push 를 막는다.
+# git pre-push: 나갈 커밋 하나하나의 트리를 임시 폴더에 떠서 ops/sensitive_check.py --strict. 하나라도 실패하면 push 를 막는다.
+# 끝 커밋 트리만 재면 중간 커밋에 넣었다 뒤 커밋에서 지운 비밀이 이력째 나간다 — 그래서 커밋마다 잰다.
 # 켜기(클론마다 한 번): git config core.hooksPath ops/hooks
 # 실값 출처는 리포 밖 ${OAKLE_PRECHECK_ENV:-~/.config/oakle-gadget/precheck.env} 에 셸 문법으로:
 #   SECRET_SOURCES=<실값 파일·폴더, 콜론 구분>   (기본값 없음 — 없으면 --strict 가 exit 2 로 막는다)
+# stdin 한 줄 = <로컬 ref> <로컬 sha> <원격 ref> <원격 sha>. 원격에 없는 커밋만 잰다.
+#   기존 ref: <원격 sha>..<로컬 sha> / 새 ref(원격 sha 0): <로컬 sha> --not --remotes=<원격 이름>. 지우는 push 는 잴 것이 없다.
+# 결과 한 줄(OK|BLOCKED … src=repo-hook)을 $PREPUSH_SCAN_LOG 또는 git config prepush.scanLog 가 가리키는 파일에 남긴다
+#   (둘 다 없거나 폴더가 없으면 안 남김, 비밀 값은 안 씀). 켜기 예: git config prepush.scanLog <로그 파일>
 # 리포가 공개라 push 가 곧 공개다. 건너뛰기는 git push --no-verify 뿐이고 그건 사람이 고른 것이다.
 set -eu
 Z=0000000000000000000000000000000000000000
@@ -10,14 +15,51 @@ ENV_FILE=${OAKLE_PRECHECK_ENV:-$HOME/.config/oakle-gadget/precheck.env}
 # shellcheck disable=SC1090
 [ ! -f "$ENV_FILE" ] || . "$ENV_FILE"
 export SECRET_SOURCES="${SECRET_SOURCES:-}"
-cd "$(git rev-parse --show-toplevel)"
-WORK=$(mktemp -d "${TMPDIR:-/tmp}/oakle-precheck.XXXXXX")
-chmod 700 "$WORK"
-trap 'rm -rf "$WORK"' EXIT INT TERM
+REPO=$(git rev-parse --show-toplevel)
+cd "$REPO"
+LOG=${PREPUSH_SCAN_LOG:-$(git config --get prepush.scanLog || true)}
+REMOTE=$(printf '%s' "${2:-${1:-?}}" | sed 's#//[^/@]*@#//#')
+N=0
+WORK=
+note() {
+  [ -n "$LOG" ] && [ -d "$(dirname "$LOG")" ] || return 0
+  printf '%s %s repo=%s remote=%s src=repo-hook commits=%s\n' \
+    "$(date +%Y-%m-%dT%H:%M:%S%z)" "$1" "$REPO" "$REMOTE" "$N" >> "$LOG" 2>/dev/null || true
+}
+finish() {
+  rc=$?
+  if [ "$rc" -eq 0 ]; then note OK; else note BLOCKED; fi
+  [ -z "$WORK" ] || rm -rf "$WORK"
+  exit "$rc"
+}
+trap finish EXIT
+trap 'exit 130' INT TERM
+
+# 원격 이름(git remote 에 있는 것)이면 그 원격의 ref 만 「이미 나간 것」으로 친다. URL 로 push 하면 모든 원격.
+if [ -n "${1:-}" ] && git config --get "remote.$1.url" >/dev/null 2>&1; then
+  NOT_REMOTES="--remotes=$1"
+else
+  NOT_REMOTES="--remotes"
+fi
+commits=
 while read -r lref lsha rref rsha; do
   [ "$lsha" != "$Z" ] || continue
-  rm -rf "$WORK/tree"; mkdir "$WORK/tree"
-  git archive --format=tar "$lsha" | tar -x -C "$WORK/tree"
-  echo "pre-push: $(git rev-parse --short=7 "$lsha") 민감정보 점검"
-  python3 ops/sensitive_check.py --strict "$WORK/tree" || { echo "pre-push 멈춤: 민감정보 점검 실패 (위 목록)"; exit 1; }
+  if [ "$rsha" = "$Z" ]; then
+    commits="$commits $(git rev-list --reverse "$lsha" --not "$NOT_REMOTES")"
+  else
+    commits="$commits $(git rev-list --reverse "$rsha..$lsha")"
+  fi
 done
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/oakle-precheck.XXXXXX")
+chmod 700 "$WORK"
+seen=" "
+for c in $commits; do
+  case "$seen" in *" $c "*) continue ;; esac
+  seen="$seen$c "
+  N=$((N + 1))
+  rm -rf "$WORK/tree"; mkdir "$WORK/tree"
+  git archive --format=tar "$c" | tar -x -C "$WORK/tree"
+  echo "pre-push: $(git rev-parse --short=7 "$c") 민감정보 점검"
+  python3 ops/sensitive_check.py --strict "$WORK/tree" || { echo "pre-push 멈춤: $(git rev-parse --short=7 "$c") 민감정보 점검 실패 (위 목록)"; exit 1; }
+done
+[ "$N" -gt 0 ] || echo "pre-push: 원격에 없는 새 커밋이 없어 잴 것이 없다"
