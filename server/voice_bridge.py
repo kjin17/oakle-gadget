@@ -298,11 +298,15 @@ def llm_claude_haiku(text, device_id):
     if not key:
         raise RuntimeError("anthropic key missing")
     body = {
-        "model": os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5"),
+        "model": os.environ.get("CLAUDE_MODEL", "claude-haiku-5-5"),
         "max_tokens": int(os.environ.get("CLAUDE_MAX_TOKENS", "200")),
         "system": "당신은 손바닥만 한 음성 기기의 비서입니다. 한국어 한두 문장, 마크다운 없이 답하세요. " + EMO_ASK,
         "messages": [{"role": "user", "content": text}],
     }
+    # Haiku 5.5 는 기본 effort medium 이라 음성엔 low(11-23 첫 토큰 중앙값 4.5 824ms · 5.5 low 669ms). 4.5 는 effort 를 안 받는다
+    effort = os.environ.get("CLAUDE_EFFORT", "low")
+    if effort and "haiku-4-5" not in body["model"]:
+        body["output_config"] = {"effort": effort}
     req = urllib.request.Request(
         "https://api.anthropic.com/v1/messages", data=json.dumps(body).encode(), method="POST",
         headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
